@@ -67,16 +67,20 @@ public interface CircuitBreaker {
     static <T> CheckedFunction0<T> decorateCheckedSupplier(CircuitBreaker circuitBreaker,
         CheckedFunction0<T> supplier) {
         return () -> {
+            // LJ MARK: 尝试获取执行权限 如果没权限会抛出 CallNotPermittedException 异常 (此时处于熔断状态)
             circuitBreaker.acquirePermission();
             final long start = circuitBreaker.getCurrentTimestamp();
             try {
+                // LJ MARK: 执行
                 T result = supplier.apply();
                 long duration = circuitBreaker.getCurrentTimestamp() - start;
+                // LJ MARK: 执行成功后 则记录状态。内部会根据config配置的 recordResultPredicate 检测 result 是否是需要统计失败率
                 circuitBreaker.onResult(duration, circuitBreaker.getTimestampUnit(), result);
                 return result;
             } catch (Exception exception) {
                 // Do not handle java.lang.Error
                 long duration = circuitBreaker.getCurrentTimestamp() - start;
+                // LJ MARK: 异常状态下，记录失败状态，计算失败率
                 circuitBreaker.onError(duration, circuitBreaker.getTimestampUnit(), exception);
                 throw exception;
             }
@@ -87,7 +91,7 @@ public interface CircuitBreaker {
      * Returns a supplier which is decorated by a CircuitBreaker.
      *
      * @param circuitBreaker the CircuitBreaker
-     * @param supplier       the original supplier
+     * @param supplier       the original suCipplier
      * @param <T>            the type of the returned CompletionStage's result
      * @return a supplier which is decorated by a CircuitBreaker.
      */
@@ -1060,6 +1064,7 @@ public interface CircuitBreaker {
             EventConsumer<CircuitBreakerOnSlowCallRateExceededEvent> eventConsumer);
     }
 
+    // LJ MARK: CircuitBreaker 指标
     interface Metrics {
 
         /**
@@ -1068,7 +1073,7 @@ public interface CircuitBreaker {
          *
          * @return the failure rate in percentage
          */
-        float getFailureRate();
+        float getFailureRate();// LJ MARK: 返回失败率，如果需要测量数小于最小测量数 返回-1
 
         /**
          * Returns the current percentage of calls which were slower than a certain threshold. If
@@ -1077,14 +1082,14 @@ public interface CircuitBreaker {
          *
          * @return the failure rate in percentage
          */
-        float getSlowCallRate();
+        float getSlowCallRate();// LJ MARK: 返回慢调用率
 
         /**
          * Returns the current total number of calls which were slower than a certain threshold.
          *
          * @return the current total number of calls which were slower than a certain threshold
          */
-        int getNumberOfSlowCalls();
+        int getNumberOfSlowCalls();// LJ MARK: 返回慢调用数
 
         /**
          * Returns the current number of successful calls which were slower than a certain
@@ -1092,28 +1097,28 @@ public interface CircuitBreaker {
          *
          * @return the current number of successful calls which were slower than a certain threshold
          */
-        int getNumberOfSlowSuccessfulCalls();
+        int getNumberOfSlowSuccessfulCalls();// LJ MARK: 慢调用成功数
 
         /**
          * Returns the current number of failed calls which were slower than a certain threshold.
          *
          * @return the current number of failed calls which were slower than a certain threshold
          */
-        int getNumberOfSlowFailedCalls();
+        int getNumberOfSlowFailedCalls();// LJ MARK: 慢调用失败数
 
         /**
          * Returns the current total number of buffered calls in the ring buffer.
          *
          * @return he current total number of buffered calls in the ring buffer
          */
-        int getNumberOfBufferedCalls();
+        int getNumberOfBufferedCalls();// LJ MARK: 返回当前总请求数
 
         /**
          * Returns the current number of failed buffered calls in the ring buffer.
          *
          * @return the current number of failed buffered calls in the ring buffer
          */
-        int getNumberOfFailedCalls();
+        int getNumberOfFailedCalls();// LJ MARK: 失败调用数
 
         /**
          * Returns the current number of not permitted calls, when the state is OPEN.
@@ -1124,14 +1129,14 @@ public interface CircuitBreaker {
          *
          * @return the current number of not permitted calls
          */
-        long getNumberOfNotPermittedCalls();
+        long getNumberOfNotPermittedCalls();// LJ MARK: 在打开状态下，返回当前不被允许请求调用的数量, 在关闭和半开下 始终为0
 
         /**
          * Returns the current number of successful buffered calls in the ring buffer.
          *
          * @return the current number of successful buffered calls in the ring buffer
          */
-        int getNumberOfSuccessfulCalls();
+        int getNumberOfSuccessfulCalls();// LJ MARK: 返回当前成功请求调用的数量
     }
 
     /**

@@ -56,6 +56,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
     private static final Logger LOG = LoggerFactory.getLogger(CircuitBreakerStateMachine.class);
 
     private final String name;
+    // LJ MARK: 保证状态的原子性，初始状态为关闭状态
     private final AtomicReference<CircuitBreakerState> stateReference;
     private final CircuitBreakerConfig circuitBreakerConfig;
     private final Map<String, String> tags;
@@ -79,8 +80,10 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         this.name = name;
         this.circuitBreakerConfig = Objects
             .requireNonNull(circuitBreakerConfig, "Config must not be null");
+        // LJ MARK: 熔断器事件处理器
         this.eventProcessor = new CircuitBreakerEventProcessor();
         this.clock = clock;
+        // LJ MARK: 初始化state为关闭状态
         this.stateReference = new AtomicReference<>(new ClosedState());
         this.schedulerFactory = schedulerFactory;
         this.tags = Objects.requireNonNull(tags, "Tags must not be null");
@@ -316,13 +319,17 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         publishResetEvent();
     }
 
+    // LJ MARK: 状态转换核心方法
     private void stateTransition(State newState,
         UnaryOperator<CircuitBreakerState> newStateGenerator) {
+        // LJ MARK: 先获取当前State然后执行状态更新方法，AtomicReference保证原子性
         CircuitBreakerState previousState = stateReference.getAndUpdate(currentState -> {
+            // LJ MARK: StateTransition 定义了可以从 A状态到B状态的枚举, 如果不存在该case，transitionBetween方法将会抛出异常
             StateTransition.transitionBetween(getName(), currentState.getState(), newState);
             currentState.preTransitionHook();
             return newStateGenerator.apply(currentState);
         });
+        // LJ MARK: 发布状态转换事件
         publishStateTransitionEvent(
             StateTransition.transitionBetween(getName(), previousState.getState(), newState));
     }
@@ -447,22 +454,23 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         return eventProcessor;
     }
 
+    // LJ MARK: 熔断器各种状态
     private interface CircuitBreakerState {
-
+        // LJ MARK: 尝试获取执行权限
         boolean tryAcquirePermission();
-
+        // LJ MARK: 获取执行权限
         void acquirePermission();
-
+        // LJ MARK: 释放权限
         void releasePermission();
-
+        // LJ MARK: 执行失败, 记录失败指标, 当达到设定值时,调用状态机触发状态转移(切换) eg: close->open
         void onError(long duration, TimeUnit durationUnit, Throwable throwable);
-
+        // LJ MARK: 执行成功,记录指标,当达到设定值时,调用状态机触发状态转移(切换) eg: open->half open
         void onSuccess(long duration, TimeUnit durationUnit);
 
         int attempts();
-
+        // LJ MARK: 返回当前熔断器状态
         CircuitBreaker.State getState();
-
+        // LJ MARK: 返回当前熔断器的指标
         CircuitBreakerMetrics getMetrics();
 
         /**
@@ -489,6 +497,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         @Override
         public EventPublisher onSuccess(
             EventConsumer<CircuitBreakerOnSuccessEvent> onSuccessEventConsumer) {
+            // LJ MARK: 注册请求成功事件的Consumer
             registerConsumer(CircuitBreakerOnSuccessEvent.class.getName(),
                 onSuccessEventConsumer);
             return this;
@@ -552,10 +561,12 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
 
         @Override
         public void consumeEvent(CircuitBreakerEvent event) {
+            // LJ MARK: 调用父类EveentProcess.processEvent 方法
             super.processEvent(event);
         }
     }
 
+    // LJ MARK: 熔断器 关闭状态
     private class ClosedState implements CircuitBreakerState {
 
         private final CircuitBreakerMetrics circuitBreakerMetrics;
@@ -608,13 +619,14 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
 
         /**
          * Transitions to open state when thresholds have been exceeded.
-         *
+         * LJ MARK: 是否达到阈值
          * @param result the Result
          */
         private void checkIfThresholdsExceeded(Result result) {
             if (Result.hasExceededThresholds(result)) {
                 if (isClosed.compareAndSet(true, false)) {
                     publishCircuitThresholdsExceededEvent(result, circuitBreakerMetrics);
+                    // LJ MARK: 转换为开启状态 调用 CircuitBreakerStateMachine 的状态转换方法
                     transitionToOpenState();
                 }
             }
@@ -637,10 +649,13 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         }
     }
 
+    // LJ MARK: 熔断器开启状态
     private class OpenState implements CircuitBreakerState {
 
         private final int attempts;
+        // LJ MARK: 打开状态的持续时间，在配置类CircuitBreakerConfig的实例中已设置
         private final Instant retryAfterWaitDuration;
+        // LJ MARK: 打开状态的指标
         private final CircuitBreakerMetrics circuitBreakerMetrics;
         private final AtomicBoolean isOpen;
 
@@ -653,7 +668,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
                 .getWaitIntervalFunctionInOpenState().apply(attempts);
             this.retryAfterWaitDuration = clock.instant().plus(waitDurationInMillis, MILLIS);
             this.circuitBreakerMetrics = circuitBreakerMetrics;
-
+            // LJ MARK: 如果设置了自动由开转换为半开状态 启动一个定时任务 来处理，在状态转换的过程中 该ScheduledFuture 将会被cancel
             if (circuitBreakerConfig.isAutomaticTransitionFromOpenToHalfOpenEnabled()) {
                 ScheduledExecutorService scheduledExecutorService = schedulerFactory.getScheduler();
                 transitionToHalfOpenFuture = scheduledExecutorService
@@ -674,13 +689,18 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         @Override
         public boolean tryAcquirePermission() {
             // Thread-safe
+            // LJ MARK: 如果到达了打开状态的持续时间，则触发状态机，由打开状态转换为半开状态，允许执行
             if (clock.instant().isAfter(retryAfterWaitDuration)) {
+                // LJ MARK: 转换为半开状态
                 toHalfOpenState();
                 // Check if the call is allowed to run in HALF_OPEN state after state transition
                 // super.tryAcquirePermission() doesn't work right that's why the code is copied
+                // LJ MARK: stateReference 此时为HalfOpenState 尝试获取执行权限
                 boolean callPermitted = stateReference.get().tryAcquirePermission();
                 if (!callPermitted) {
+                    // LJ MARK: event 事件
                     publishCallNotPermittedEvent();
+                    // LJ MARK: 处理指标
                     circuitBreakerMetrics.onCallNotPermitted();
                 }
                 return callPermitted;
@@ -761,6 +781,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
 
     }
 
+    // LJ MARK: 熔断器-disable状态
     private class DisabledState implements CircuitBreakerState {
 
         private final CircuitBreakerMetrics circuitBreakerMetrics;
@@ -772,7 +793,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
 
         /**
          * Returns always true, because the CircuitBreaker is disabled.
-         *
+         * LJ MARK: 熔断器在disable状态下，总是允许执行
          * @return always true, because the CircuitBreaker is disabled.
          */
         @Override
@@ -825,6 +846,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         }
     }
 
+    // LJ MARK: 仅开启指标状态
     private class MetricsOnlyState implements CircuitBreakerState {
 
         private final CircuitBreakerMetrics circuitBreakerMetrics;
@@ -917,6 +939,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         }
     }
 
+    // LJ MARK: 强制开启状态
     private class ForcedOpenState implements CircuitBreakerState {
 
         private final CircuitBreakerMetrics circuitBreakerMetrics;
@@ -985,9 +1008,11 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         }
     }
 
+    // LJ MARK: 半开状态
     private class HalfOpenState implements CircuitBreakerState {
-
+        // LJ MARK: 半开状态下 允许执行数 在CircuitBreakerConfig中配置
         private final AtomicInteger permittedNumberOfCalls;
+        // LJ MARK: 是否处于半开状态
         private final AtomicBoolean isHalfOpen;
         private final int attempts;
         private final CircuitBreakerMetrics circuitBreakerMetrics;
@@ -1002,7 +1027,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
             this.permittedNumberOfCalls = new AtomicInteger(permittedNumberOfCallsInHalfOpenState);
             this.isHalfOpen = new AtomicBoolean(true);
             this.attempts = attempts;
-
+            // LJ MARK: 半开状态持续时间 如果大于1 则启用定时任务 将其转换为开启状态
             final long maxWaitDurationInHalfOpenState = circuitBreakerConfig.getMaxWaitDurationInHalfOpenState().toMillis();
             if (maxWaitDurationInHalfOpenState >= 1) {
                 ScheduledExecutorService scheduledExecutorService = schedulerFactory.getScheduler();
@@ -1023,6 +1048,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
          */
         @Override
         public boolean tryAcquirePermission() {
+            // LJ MARK: 半开状态下允许执行数 是否还够额
             if (permittedNumberOfCalls.getAndUpdate(current -> current == 0 ? current : --current)
                 > 0) {
                 return true;
@@ -1085,11 +1111,13 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
          * @param result the result
          */
         private void checkIfThresholdsExceeded(Result result) {
+            // LJ MARK: 如果失败率大于等于阈值 则转换为开启状态
             if (Result.hasExceededThresholds(result)) {
                 if (isHalfOpen.compareAndSet(true, false)) {
                     transitionToOpenState();
                 }
             }
+            // LJ MARK: 失败率小于阈值 则转换为关闭状态
             if (result == BELOW_THRESHOLDS) {
                 if (isHalfOpen.compareAndSet(true, false)) {
                     transitionToClosedState();

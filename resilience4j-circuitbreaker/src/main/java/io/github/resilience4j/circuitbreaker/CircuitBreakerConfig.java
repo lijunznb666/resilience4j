@@ -54,31 +54,45 @@ public class CircuitBreakerConfig implements Serializable {
     private static final TimeUnit DEFAULT_TIMESTAMP_UNIT = TimeUnit.NANOSECONDS;
     private static final Predicate<Object> DEFAULT_RECORD_RESULT_PREDICATE = (Object object) -> false;
     // The default exception predicate counts all exceptions as failures.
+    // LJ MARK: 默认所有的Throwable都计算失败率
     private Predicate<Throwable> recordExceptionPredicate = DEFAULT_RECORD_EXCEPTION_PREDICATE;
     // The default exception predicate ignores no exceptions.
+    // LJ MARK: 默认所有Throwable都不忽略
     private Predicate<Throwable> ignoreExceptionPredicate = DEFAULT_IGNORE_EXCEPTION_PREDICATE;
+    // LJ MARK: 该函数返回CircuitBreaker的当前时间戳。默认实现使用System.nanoTime（）来计算当前时间戳。当然我们可以通过设置该函数来实现毫秒值
     private Function<Clock, Long> currentTimestampFunction = DEFAULT_TIMESTAMP_FUNCTION;
     private TimeUnit timestampUnit = DEFAULT_TIMESTAMP_UNIT;
-
+    // LJ MARK: 默认只要有结果集都是不需要记录的
     private transient Predicate<Object> recordResultPredicate = DEFAULT_RECORD_RESULT_PREDICATE;
-
+    // LJ MARK: 需要记录为失败的异常
     @SuppressWarnings("unchecked")
     private Class<? extends Throwable>[] recordExceptions = new Class[0];
+    // LJ MARK: 需要忽略的异常
     @SuppressWarnings("unchecked")
     private Class<? extends Throwable>[] ignoreExceptions = new Class[0];
-
+    // LJ MARK: 请求调用失败的阈值,百分比,默认50%
     private float failureRateThreshold = DEFAULT_FAILURE_RATE_THRESHOLD;
+    // LJ MARK: 熔断器在半开状态下允许的成功执行的请求数 默认10
     private int permittedNumberOfCallsInHalfOpenState = DEFAULT_PERMITTED_CALLS_IN_HALF_OPEN_STATE;
+    // LJ MARK: 熔断器滑动窗口大小 默认100 如果窗口类型是基于计数的滑动窗口 那么该值得含义就是固定数组的大小存放每次请求的结果。如果窗口类型是基于时间的滑动窗口 那么该值得含义就是窗口大小 例如10 就会有10个存储桶每个存储桶窗口大小是1s
     private int slidingWindowSize = DEFAULT_SLIDING_WINDOW_SIZE;
+    // LJ MARK: 滑动窗口类型 默认是基于计数的COUNT_BASED 还有一种基于时间轮的 TIME_BASED
     private SlidingWindowType slidingWindowType = DEFAULT_SLIDING_WINDOW_TYPE;
+    // LJ MARK: 最小的调用数, 默认100, 如果调用数小于该值, 即使全部失败, 熔断器也不会生效
     private int minimumNumberOfCalls = DEFAULT_MINIMUM_NUMBER_OF_CALLS;
+    // LJ MARK: 启用可写的堆栈跟踪。设置为false时，Exception＃getStackTrace返回长度为零的数组。当断路器打开时，这可以用来减少垃圾日志，因为已知异常的原因。
     private boolean writableStackTraceEnabled = DEFAULT_WRITABLE_STACK_TRACE_ENABLED;
+    // LJ MARK: 是否允许熔断器自动从开启状态超时后转换为半开状态 如果开启，将会启动一个定时任务来处理 参见: {@link io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine.OpenState.OpenState)
     private boolean automaticTransitionFromOpenToHalfOpenEnabled = false;
+    // LJ MARK: 熔断器打开状态下的持续时间 默认60s
     private IntervalFunction waitIntervalFunctionInOpenState = IntervalFunction
         .of(Duration.ofSeconds(DEFAULT_WAIT_DURATION_IN_OPEN_STATE));
+    // LJ MARK: 慢调用的阈值,百分比,默认100% 当所有请求都比slowCallDurationThreshold慢 就熔断
     private float slowCallRateThreshold = DEFAULT_SLOW_CALL_RATE_THRESHOLD;
+    // LJ MARK: 慢调用的时间阈值, 如果执行时间大于该值则认为是慢调用, 默认60s, 慢调用到一定比例将会触发熔断 参考 slowCallRateThreshold
     private Duration slowCallDurationThreshold = Duration
         .ofSeconds(DEFAULT_SLOW_CALL_DURATION_THRESHOLD);
+    // LJ MARK: 半开状态下的最大持续时间，达到该时间将自动转换为打开状态，控制在切换为打开状态之前应保持半开状态的时间，默认0 也就是默认都保持半开，直到 minimumNumberOfCalls 成功或失败 为止 参考{@linke io.github.resilience4j.circuitbreaker.internal.CircuitBreakerStateMachine.HalfOpenState.HalfOpenState}
     private Duration maxWaitDurationInHalfOpenState = Duration
         .ofSeconds(DEFAULT_WAIT_DURATION_IN_HALF_OPEN_STATE);
 

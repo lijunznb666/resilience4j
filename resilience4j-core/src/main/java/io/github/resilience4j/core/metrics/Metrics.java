@@ -24,16 +24,16 @@ public interface Metrics {
 
     /**
      * Records a call.
-     *
-     * @param duration     the duration of the call
-     * @param durationUnit the time unit of the duration
-     * @param outcome      the outcome of the call
+     * LJ MARK: 负责记录一次请求的信息
+     * @param duration     the duration of the call 执行时间
+     * @param durationUnit the time unit of the duration 时间单位
+     * @param outcome      the outcome of the call 执行结果
      */
     Snapshot record(long duration, TimeUnit durationUnit, Outcome outcome);
 
     /**
      * Returns a snapshot.
-     *
+     * LJ MARK: 获取当前度量指标快照信息
      * @return a snapshot
      */
     Snapshot getSnapshot();

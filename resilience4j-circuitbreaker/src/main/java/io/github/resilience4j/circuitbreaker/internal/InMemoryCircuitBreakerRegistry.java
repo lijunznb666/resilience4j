@@ -39,6 +39,7 @@ import java.util.function.Supplier;
 /**
  * Backend circuitBreaker manager. Constructs backend circuitBreakers according to configuration
  * values.
+ * LJ MARK: 实现CircuitBreakerRegistry，负责管理CircuitBreaker
  */
 public final class InMemoryCircuitBreakerRegistry extends
     AbstractRegistry<CircuitBreaker, CircuitBreakerConfig> implements CircuitBreakerRegistry {

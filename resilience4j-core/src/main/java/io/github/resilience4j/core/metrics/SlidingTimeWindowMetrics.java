@@ -44,10 +44,13 @@ import java.util.concurrent.TimeUnit;
  * individually. Only {@code N} partial aggregations and 1 total total aggregation are created.
  */
 public class SlidingTimeWindowMetrics implements Metrics {
-
+    // LJ MARK: O(n) part[i]记录的是当前epochSecond 秒内的所有请求数和调用数
     final PartialAggregation[] partialAggregations;
+    // LJ MARK: 滑动窗口大小
     private final int timeWindowSizeInSeconds;
+    // LJ MARK: 指标总聚合
     private final TotalAggregation totalAggregation;
+    // LJ MARK: clock 取的是 CircuitBreakerState 中的clock
     private final Clock clock;
     int headIndex;
 
@@ -70,9 +73,11 @@ public class SlidingTimeWindowMetrics implements Metrics {
         this.totalAggregation = new TotalAggregation();
     }
 
+    // LJ MARK: 记录
     @Override
     public synchronized Snapshot record(long duration, TimeUnit durationUnit, Outcome outcome) {
         totalAggregation.record(duration, durationUnit, outcome);
+        // LJ MARK: 后移滑动窗口
         moveWindowToCurrentEpochSecond(getLatestPartialAggregation())
             .record(duration, durationUnit, outcome);
         return new SnapshotImpl(totalAggregation);
@@ -95,10 +100,12 @@ public class SlidingTimeWindowMetrics implements Metrics {
     private PartialAggregation moveWindowToCurrentEpochSecond(
         PartialAggregation latestPartialAggregation) {
         long currentEpochSecond = clock.instant().getEpochSecond();
+        // LJ MARK: 计算当前时间与 与上一个时间轮之间的差距
         long differenceInSeconds = currentEpochSecond - latestPartialAggregation.getEpochSecond();
         if (differenceInSeconds == 0) {
             return latestPartialAggregation;
         }
+        // LJ MARK: 后移多少
         long secondsToMoveTheWindow = Math.min(differenceInSeconds, timeWindowSizeInSeconds);
         PartialAggregation currentPartialAggregation;
         do {

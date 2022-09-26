@@ -36,11 +36,15 @@ import java.util.concurrent.TimeUnit;
  * independent of the window size. The space requirement (memory consumption) of this implementation
  * should be O(n).
  */
+// LJ MARK: 基于计数的滑动窗口算法 获取指标时间复杂度 O(1)(快照预先聚合 totalAggregation) 空间复杂度 O(n)
 public class FixedSizeSlidingWindowMetrics implements Metrics {
-
+    // LJ MARK: 滑动窗口大小
     private final int windowSize;
+    // LJ MARK: 指标聚合信息   包含 总执行时间，慢调用数，慢调用失败数，失败数，调用数
     private final TotalAggregation totalAggregation;
+    // LJ MARK: 度量数组
     private final Measurement[] measurements;
+    // LJ MARK: 当前滑动窗口位置
     int headIndex;
 
     /**
@@ -58,6 +62,7 @@ public class FixedSizeSlidingWindowMetrics implements Metrics {
         this.totalAggregation = new TotalAggregation();
     }
 
+    // LJ MARK: 加锁 保证线程安全
     @Override
     public synchronized Snapshot record(long duration, TimeUnit durationUnit, Outcome outcome) {
         totalAggregation.record(duration, durationUnit, outcome);
@@ -65,14 +70,19 @@ public class FixedSizeSlidingWindowMetrics implements Metrics {
         return new SnapshotImpl(totalAggregation);
     }
 
+    // LJ MARK: 加锁 保证线程安全
     public synchronized Snapshot getSnapshot() {
         return new SnapshotImpl(totalAggregation);
     }
 
     private Measurement moveWindowByOne() {
+        // LJ MARK: 前进一位
         moveHeadIndexByOne();
+        // LJ MARK: 获取旧指标信息
         Measurement latestMeasurement = getLatestMeasurement();
+        // LJ MARK: 从总聚合中减去旧指标
         totalAggregation.removeBucket(latestMeasurement);
+        // LJ MARK: 重置当前指标
         latestMeasurement.reset();
         return latestMeasurement;
     }

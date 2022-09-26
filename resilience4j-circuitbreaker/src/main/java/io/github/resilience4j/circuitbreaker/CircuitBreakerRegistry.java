@@ -34,12 +34,13 @@ import java.util.function.Supplier;
 /**
  * The {@link CircuitBreakerRegistry} is a factory to create CircuitBreaker instances which stores
  * all CircuitBreaker instances in a registry.
+ * LJ MARK: 负责管理熔断器实例的注册容器
  */
 public interface CircuitBreakerRegistry extends Registry<CircuitBreaker, CircuitBreakerConfig> {
 
     /**
      * Creates a CircuitBreakerRegistry with a custom default CircuitBreaker configuration.
-     *
+     * LJ MARK: 根据自定义配置创建一个CircuitBreakerRegistry
      * @param circuitBreakerConfig a custom default CircuitBreaker configuration
      * @return a CircuitBreakerRegistry with a custom CircuitBreaker configuration.
      */
@@ -155,7 +156,7 @@ public interface CircuitBreakerRegistry extends Registry<CircuitBreaker, Circuit
 
     /**
      * Returns all managed {@link CircuitBreaker} instances.
-     *
+     * LJ MARK: 返回所有的CircuitBreaker 实例
      * @return all managed {@link CircuitBreaker} instances.
      */
     Seq<CircuitBreaker> getAllCircuitBreakers();
@@ -163,7 +164,7 @@ public interface CircuitBreakerRegistry extends Registry<CircuitBreaker, Circuit
     /**
      * Returns a managed {@link CircuitBreaker} or creates a new one with the default CircuitBreaker
      * configuration.
-     *
+     * LJ MARK: 根据名称返回CircuitBreaker实例, 如果不存在就根据默认配置 创建一个CircuitBreaker实例并返回
      * @param name the name of the CircuitBreaker
      * @return The {@link CircuitBreaker}
      */
@@ -186,7 +187,7 @@ public interface CircuitBreakerRegistry extends Registry<CircuitBreaker, Circuit
     /**
      * Returns a managed {@link CircuitBreaker} or creates a new one with a custom CircuitBreaker
      * configuration.
-     *
+     * LJ MARK: 根据名称返回CircuitBreaker实例, 如果不存在就根据配置 创建一个CircuitBreaker实例并返回
      * @param name   the name of the CircuitBreaker
      * @param config a custom CircuitBreaker configuration
      * @return The {@link CircuitBreaker}

@@ -26,8 +26,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class EventProcessor<T> implements EventPublisher<T> {
-
+    // LJ MARK: 事件消费者list
     final List<EventConsumer<T>> onEventConsumers = new CopyOnWriteArrayList<>();
+    // LJ MARK: <Key, List<Consumer>
     final ConcurrentMap<String, List<EventConsumer<T>>> eventConsumerMap = new ConcurrentHashMap<>();
     private boolean consumerRegistered;
 
