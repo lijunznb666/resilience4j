@@ -150,6 +150,7 @@ class CircuitBreakerMetrics implements CircuitBreaker.Metrics {
      * @param snapshot a metrics snapshot
      * @return false, if the thresholds haven't been exceeded.
      */
+    // LJ MARK 核心内容
     private Result checkIfThresholdsExceeded(Snapshot snapshot) {
         float failureRateInPercentage = getFailureRate(snapshot);
         float slowCallsInPercentage = getSlowCallRate(snapshot);
